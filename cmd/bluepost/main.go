@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -30,7 +31,10 @@ func run(
 	client := bus.NewClient(nil)
 	var connection *dbus.Conn
 	command := cli.New(client, stdout, stderr)
-	command.AddCommand(daemon)
+	widget := newWidgetCommand(client, func(ctx context.Context) (<-chan *dbus.Signal, func(), error) {
+		return subscribeWidgetSignals(ctx, connection)
+	})
+	command.AddCommand(daemon, widget)
 	command.SetArgs(args)
 	command.PersistentPreRunE = func(selected *cobra.Command, _ []string) error {
 		if selected == daemon {

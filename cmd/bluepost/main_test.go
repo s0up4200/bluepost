@@ -37,6 +37,29 @@ func TestHelpDoesNotConnectToDBus(t *testing.T) {
 	}
 }
 
+func TestWidgetHelpDoesNotConnectToDBus(t *testing.T) {
+	t.Parallel()
+
+	var output bytes.Buffer
+	connectCalls := 0
+	exitCode := run(
+		[]string{"widget", "--help"},
+		&output,
+		&output,
+		func() (*dbus.Conn, error) {
+			connectCalls++
+			return nil, errors.New("D-Bus is unavailable")
+		},
+		&cobra.Command{Use: "daemon"},
+	)
+	if exitCode != 0 {
+		t.Fatalf("exit code %d, output %q", exitCode, output.String())
+	}
+	if connectCalls != 0 {
+		t.Fatalf("D-Bus connection attempts %d", connectCalls)
+	}
+}
+
 func TestDaemonDoesNotConnectToClientDBus(t *testing.T) {
 	t.Parallel()
 
