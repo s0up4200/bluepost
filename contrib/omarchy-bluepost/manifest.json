@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.s0up4200.bluepost",
+  "name": "Bluepost",
+  "version": "0.1.0",
+  "author": "s0up4200",
+  "description": "Show iPhone connection health and recent SMS messages",
+  "kinds": ["bar-widget"],
+  "entryPoints": {"barWidget": "Panel.qml"},
+  "barWidget": {
+    "displayName": "Bluepost",
+    "description": "Shows iPhone connection health and recent SMS messages",
+    "category": "Network",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}
