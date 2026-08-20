@@ -84,6 +84,32 @@ func (sessions *Sessions) Close(ctx context.Context) error {
 	return sessions.close(ctx, true)
 }
 
+func (sessions *Sessions) RefreshMAP(ctx context.Context) error {
+	sessions.mu.Lock()
+	path := sessions.mapPath
+	phone := sessions.phone
+	if phone == "" {
+		sessions.mu.Unlock()
+		return errors.New("MAP session is not available")
+	}
+	sessions.mapPath = ""
+	sessions.mu.Unlock()
+
+	if path != "" {
+		if err := sessions.remove(ctx, path); err != nil {
+			return err
+		}
+	}
+	path, err := sessions.create(ctx, phone, "MAP", true)
+	if err != nil {
+		return err
+	}
+	sessions.mu.Lock()
+	sessions.mapPath = path
+	sessions.mu.Unlock()
+	return nil
+}
+
 func (sessions *Sessions) close(ctx context.Context, removeRemote bool) error {
 	sessions.mu.Lock()
 	paths := []dbus.ObjectPath{sessions.mapPath, sessions.pbapPath}

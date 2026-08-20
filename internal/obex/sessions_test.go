@@ -166,6 +166,93 @@ func TestSessionsDiscardDisappearedPathWithoutRemoteRemoval(t *testing.T) {
 	}
 }
 
+func TestSessionsRefreshMAPWithoutReopeningPBAP(t *testing.T) {
+	t.Parallel()
+
+	phone := "AA:BB:CC:DD:EE:FF"
+	obex := sessionTransport()
+	sessions := NewSessions(trustedSystemTransport(phone, true, true), obex)
+	if err := sessions.Open(context.Background(), phone); err != nil {
+		t.Fatal(err)
+	}
+	pbapPath, _ := sessions.PBAPPath()
+	if err := sessions.RefreshMAP(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := sessions.MapPath(); !ok {
+		t.Fatal("refreshed MAP path is unavailable")
+	}
+	if got, ok := sessions.PBAPPath(); !ok || got != pbapPath {
+		t.Fatalf("PBAP path %q, available %v", got, ok)
+	}
+
+	created := map[string]int{}
+	var removed []dbus.ObjectPath
+	for _, call := range obex.calls {
+		switch call.method {
+		case clientCreateSession:
+			options := call.args[1].(map[string]dbus.Variant)
+			created[options["Target"].Value().(string)]++
+		case clientRemoveSession:
+			removed = append(removed, call.args[0].(dbus.ObjectPath))
+		}
+	}
+	if created["MAP"] != 2 || created["PBAP"] != 1 {
+		t.Fatalf("created sessions %#v", created)
+	}
+	if len(removed) != 1 || removed[0] != "/org/bluez/obex/client/session_map" {
+		t.Fatalf("removed sessions %q", removed)
+	}
+}
+
+func TestSessionsRetryMAPRefreshAfterCreateError(t *testing.T) {
+	t.Parallel()
+
+	phone := "AA:BB:CC:DD:EE:FF"
+	mapCreates := 0
+	obex := &fakeTransport{}
+	obex.handler = func(call transportCall) ([]any, error) {
+		switch call.method {
+		case objectManagerGetManagedObjects:
+			return []any{managedObjects{}}, nil
+		case clientCreateSession:
+			target := call.args[1].(map[string]dbus.Variant)["Target"].Value().(string)
+			if target == "PBAP" {
+				return []any{dbus.ObjectPath("/org/bluez/obex/client/session_pbap")}, nil
+			}
+			mapCreates++
+			if mapCreates == 2 {
+				return nil, errors.New("temporary MAP create error")
+			}
+			return []any{dbus.ObjectPath("/org/bluez/obex/client/session_map")}, nil
+		case clientRemoveSession:
+			return nil, nil
+		default:
+			return nil, errors.New("unexpected call: " + call.method)
+		}
+	}
+	sessions := NewSessions(trustedSystemTransport(phone, true, true), obex)
+	if err := sessions.Open(context.Background(), phone); err != nil {
+		t.Fatal(err)
+	}
+	pbapPath, _ := sessions.PBAPPath()
+	if err := sessions.RefreshMAP(context.Background()); err == nil {
+		t.Fatal("expected first MAP refresh error")
+	}
+	if err := sessions.RefreshMAP(context.Background()); err != nil {
+		t.Fatalf("retry MAP refresh: %v", err)
+	}
+	if _, ok := sessions.MapPath(); !ok {
+		t.Fatal("retried MAP path is unavailable")
+	}
+	if got, ok := sessions.PBAPPath(); !ok || got != pbapPath {
+		t.Fatalf("PBAP path %q, available %v", got, ok)
+	}
+	if mapCreates != 3 {
+		t.Fatalf("MAP create calls %d", mapCreates)
+	}
+}
+
 func TestSessionsRejectUnpairedOrUntrustedPhone(t *testing.T) {
 	t.Parallel()
 

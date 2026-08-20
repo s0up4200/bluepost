@@ -73,6 +73,12 @@ func (profiles *Profiles) ListRecent(
 	return messages, err
 }
 
+func (profiles *Profiles) RefreshMAP(ctx context.Context) error {
+	return profiles.worker.Submit(ctx, func(callCtx context.Context) error {
+		return profiles.sessions.RefreshMAP(callCtx)
+	})
+}
+
 func (profiles *Profiles) SyncContacts(ctx context.Context) ([]model.Contact, error) {
 	var contacts []model.Contact
 	err := profiles.worker.Submit(ctx, func(callCtx context.Context) error {

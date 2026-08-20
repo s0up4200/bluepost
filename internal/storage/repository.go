@@ -101,6 +101,14 @@ func (repository *Repository) Open() error {
 }
 
 func (repository *Repository) AppendMessage(message model.Message) (bool, error) {
+	return repository.appendMessage(message, true)
+}
+
+func (repository *Repository) AppendMessageIfMissing(message model.Message) (bool, error) {
+	return repository.appendMessage(message, false)
+}
+
+func (repository *Repository) appendMessage(message model.Message, replace bool) (bool, error) {
 	if err := validateMessage(message); err != nil {
 		return false, err
 	}
@@ -118,6 +126,9 @@ func (repository *Repository) AppendMessage(message model.Message) (bool, error)
 	for index, existing := range repository.messages {
 		if message.Handle != "" && existing.Handle == message.Handle {
 			created = false
+			if !replace {
+				return false, nil
+			}
 			continue
 		}
 		candidate = append(candidate, existing)

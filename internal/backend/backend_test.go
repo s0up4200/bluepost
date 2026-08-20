@@ -25,6 +25,7 @@ type fakeProfiles struct {
 	openCalls  int
 	openErrors []error
 	watch      func(context.Context, func(model.Message) error) error
+	refreshMAP func(context.Context) error
 	mapReady   bool
 	pbapReady  bool
 	recent     []model.Message
@@ -53,6 +54,13 @@ func (profiles *fakeProfiles) Watch(ctx context.Context, callback func(model.Mes
 
 func (profiles *fakeProfiles) ListRecent(context.Context, string, uint32) ([]model.Message, error) {
 	return append([]model.Message(nil), profiles.recent...), nil
+}
+
+func (profiles *fakeProfiles) RefreshMAP(ctx context.Context) error {
+	if profiles.refreshMAP != nil {
+		return profiles.refreshMAP(ctx)
+	}
+	return nil
 }
 
 func (profiles *fakeProfiles) SyncContacts(context.Context) ([]model.Contact, error) {
@@ -207,6 +215,114 @@ func TestRunUsesInitialAndReconnectRetryIntervals(t *testing.T) {
 	}
 }
 
+func TestRunPollsAndRefreshesMAPAfterMissedPush(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 8, 20, 22, 33, 0, 0, time.Local)
+	refreshed := make(chan struct{}, 1)
+	notified := make(chan model.Message, 1)
+	profiles := &fakeProfiles{
+		mapReady:  true,
+		pbapReady: true,
+		recent: []model.Message{{
+			Handle:    "message42",
+			Body:      "Your verification code is 123456",
+			Timestamp: now,
+		}},
+		refreshMAP: func(context.Context) error {
+			refreshed <- struct{}{}
+			return nil
+		},
+	}
+	service := New(Config{
+		Phone:    "AA:BB:CC:DD:EE:FF",
+		StateDir: filepath.Join(t.TempDir(), "state"),
+		Keys:     fixedKeySource(0x36),
+		Profiles: profiles,
+		Notify: func(_ context.Context, message model.Message) {
+			notified <- message
+		},
+	})
+	service.now = func() time.Time { return now }
+	waits := 0
+	service.wait = func(ctx context.Context, duration time.Duration) error {
+		if duration != 15*time.Second {
+			return errors.New("unexpected wait duration")
+		}
+		waits++
+		if waits == 1 {
+			return nil
+		}
+		<-ctx.Done()
+		return ctx.Err()
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- service.Run(ctx) }()
+	select {
+	case <-refreshed:
+	case <-time.After(time.Second):
+		cancel()
+		<-done
+		t.Fatal("backend did not refresh MAP after polling found a missed message")
+	}
+	select {
+	case message := <-notified:
+		if message.Handle != "message42" {
+			t.Fatalf("notification %#v", message)
+		}
+	default:
+		t.Fatal("polled message was not notified")
+	}
+	messages, err := service.ListEvents([]string{"sms_received"}, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(messages) != 1 || messages[0].Handle != "message42" {
+		t.Fatalf("messages %#v", messages)
+	}
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatalf("run error %v", err)
+	}
+}
+
+func TestPollMessagesRetriesFailedMAPRefresh(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	refreshCalls := 0
+	profiles := &fakeProfiles{
+		recent: []model.Message{{Handle: "message42", Body: "hello"}},
+		refreshMAP: func(context.Context) error {
+			refreshCalls++
+			if refreshCalls == 1 {
+				return errors.New("temporary MAP refresh error")
+			}
+			cancel()
+			return nil
+		},
+	}
+	service := notificationBackend(t, time.Now(), nil)
+	service.config.Profiles = profiles
+	service.wait = func(ctx context.Context, _ time.Duration) error {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			return nil
+		}
+	}
+	if err := service.pollMessages(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("poll error %v", err)
+	}
+	if refreshCalls != 2 {
+		t.Fatalf("MAP refresh calls %d", refreshCalls)
+	}
+}
+
 func TestSyncContactsUpdatesSenderResolution(t *testing.T) {
 	t.Parallel()
 
@@ -265,6 +381,39 @@ func TestAcceptMessageDoesNotNotifyReplayedHandle(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("notification count %d", count)
+	}
+
+}
+
+func TestPollMessagesKeepsFullBodyForKnownHandle(t *testing.T) {
+	t.Parallel()
+
+	stop := errors.New("stop polling")
+	profiles := &fakeProfiles{recent: []model.Message{{Handle: "message1", Body: "short subject"}}}
+	service := notificationBackend(t, time.Now(), nil)
+	service.config.Profiles = profiles
+	if err := service.acceptMessage(context.Background(), model.Message{
+		Handle: "message1", Body: "complete message body",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	waits := 0
+	service.wait = func(context.Context, time.Duration) error {
+		waits++
+		if waits == 1 {
+			return nil
+		}
+		return stop
+	}
+	if err := service.pollMessages(context.Background()); !errors.Is(err, stop) {
+		t.Fatalf("poll error %v", err)
+	}
+	messages, err := service.ListEvents([]string{"sms_received"}, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(messages) != 1 || messages[0].Body != "complete message body" {
+		t.Fatalf("messages %#v", messages)
 	}
 }
 

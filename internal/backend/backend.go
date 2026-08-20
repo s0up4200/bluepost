@@ -24,6 +24,7 @@ type ProfileClient interface {
 	Open(context.Context, string) error
 	Watch(context.Context, func(model.Message) error) error
 	ListRecent(context.Context, string, uint32) ([]model.Message, error)
+	RefreshMAP(context.Context) error
 	SyncContacts(context.Context) ([]model.Contact, error)
 	Health() (bool, bool)
 	Close(context.Context, bool) error
@@ -54,6 +55,8 @@ type Backend struct {
 const (
 	notificationMaxAge     = 5 * time.Minute
 	notificationFutureSkew = time.Minute
+	messagePollInterval    = 15 * time.Second
+	messagePollLimit       = 20
 )
 
 func New(config Config) *Backend {
@@ -139,9 +142,7 @@ func (backend *Backend) Run(ctx context.Context) error {
 		connected = true
 		mapReady, pbapReady := backend.config.Profiles.Health()
 		backend.setConnectionState("ready", "MAP and PBAP sessions are available", mapReady, pbapReady)
-		err = backend.config.Profiles.Watch(ctx, func(message model.Message) error {
-			return backend.acceptMessage(ctx, message)
-		})
+		err = backend.watchProfiles(ctx)
 		if ctx.Err() != nil {
 			backend.closeProfiles(true)
 			backend.setConnectionState("stopped", "The daemon stopped", false, false)
@@ -159,6 +160,72 @@ func (backend *Backend) Run(ctx context.Context) error {
 			return err
 		}
 	}
+}
+
+func (backend *Backend) watchProfiles(ctx context.Context) error {
+	watchCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	results := make(chan error, 2)
+	go func() {
+		results <- backend.config.Profiles.Watch(watchCtx, func(message model.Message) error {
+			return backend.acceptMessage(watchCtx, message)
+		})
+	}()
+	go func() { results <- backend.pollMessages(watchCtx) }()
+	select {
+	case err := <-results:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (backend *Backend) pollMessages(ctx context.Context) error {
+	refreshPending := false
+	for {
+		if err := backend.wait(ctx, messagePollInterval); err != nil {
+			return err
+		}
+		if refreshPending {
+			if err := backend.refreshMAP(ctx); err != nil {
+				continue
+			}
+			refreshPending = false
+		}
+		operationCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
+		messages, err := backend.config.Profiles.ListRecent(
+			operationCtx,
+			"telecom/msg/inbox",
+			messagePollLimit,
+		)
+		cancel()
+		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			continue
+		}
+		missed := false
+		for _, message := range messages {
+			created, err := backend.storeMessage(ctx, message, true)
+			if err != nil {
+				return err
+			}
+			missed = missed || created
+		}
+		if !missed {
+			continue
+		}
+		if err := backend.refreshMAP(ctx); err != nil {
+			refreshPending = true
+		}
+	}
+}
+
+func (backend *Backend) refreshMAP(ctx context.Context) error {
+	operationCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	return backend.config.Profiles.RefreshMAP(operationCtx)
 }
 
 func (backend *Backend) Status() model.Status {
@@ -276,25 +343,42 @@ func (backend *Backend) SetSignals(historyChanged func(uint64), statusChanged fu
 }
 
 func (backend *Backend) acceptMessage(ctx context.Context, message model.Message) error {
+	_, err := backend.storeMessage(ctx, message, false)
+	return err
+}
+
+func (backend *Backend) storeMessage(
+	ctx context.Context,
+	message model.Message,
+	onlyIfMissing bool,
+) (bool, error) {
 	repository, err := backend.unlockedRepository()
 	if err != nil {
-		return err
+		return false, err
 	}
 	if message.Kind == "" {
 		message.Kind = "sms_received"
 	}
-	created, err := repository.AppendMessage(message)
+	var created bool
+	if onlyIfMissing {
+		created, err = repository.AppendMessageIfMissing(message)
+	} else {
+		created, err = repository.AppendMessage(message)
+	}
 	if err != nil {
 		if errors.Is(err, storage.ErrLocked) {
 			backend.lock(err)
 		}
-		return err
+		return false, err
+	}
+	if onlyIfMissing && !created {
+		return false, nil
 	}
 	backend.emitHistoryChanged()
 	if created && backend.config.Notify != nil && recentMessage(message.Timestamp, backend.now()) {
 		backend.config.Notify(ctx, message)
 	}
-	return nil
+	return created, nil
 }
 
 func recentMessage(timestamp, now time.Time) bool {

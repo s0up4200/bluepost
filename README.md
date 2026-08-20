@@ -14,9 +14,10 @@ Bluepost provides one binary.
 `bluepost daemon` receives messages, synchronizes contacts, and owns encrypted storage.
 The other `bluepost` commands read daemon status, messages, and contacts.
 
-The daemon stores new messages that arrive while it is connected.
+The daemon receives MAP notifications and checks the 20 newest inbox entries every 15 seconds.
+If this check finds a missed notification, the daemon opens a new MAP session.
 A live inbox query reads recent MAP entries from the iPhone.
-The live entries can contain only the short subject text that the iPhone provides.
+Polled and live entries can contain only the short subject text that the iPhone provides.
 
 `bluepost daemon` shows the full text of each new SMS in a desktop notification.
 A left click copies one clear authentication code when the message contains one.
