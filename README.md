@@ -19,6 +19,10 @@ The daemon stores new messages that arrive while it is connected.
 A live inbox query reads recent MAP entries from the iPhone.
 The live entries can contain only the short subject text that the iPhone provides.
 
+`bluepostd` shows the full text of each new SMS in a desktop notification.
+A left click copies one clear authentication code when the message contains one.
+Bluepost never copies ordinary SMS text.
+
 Bluepost cannot send, reply to, delete, or mark a message as read.
 It does not support attachments, reactions, groups, calls, ANCS notifications, or a graphical interface.
 
@@ -30,6 +34,8 @@ The first release supports Arch Linux on x86-64 with:
 - BlueZ 5.86 or later
 - `bluez-obex`, including its `obexd` D-Bus service
 - GNOME Keyring and `/usr/bin/secret-tool`
+- `notify-send` from libnotify
+- `wl-copy` from wl-clipboard
 - A user D-Bus session
 
 This repository does not install or configure these requirements.
@@ -125,6 +131,12 @@ It does not protect content from root or another process that already runs as th
 It also cannot detect deletion of an encrypted file or replacement with an older authentic copy.
 Decrypted content exists in process memory while the daemon runs.
 
+Omarchy stores its ten most recent notifications as plain JSON.
+These files can contain the sender, the full message body, and an authentication code.
+Bluepost uses `wl-copy --sensitive` to keep authentication codes out of Omarchy clipboard history.
+A copied code remains in the active clipboard until another copy replaces it.
+Restored notifications do not keep the copy action in this version.
+
 ## Development checks
 
 Run the full local check with:
@@ -141,4 +153,6 @@ Run the D-Bus integration test in a private user session:
 dbus-run-session -- env BLUEPOST_TEST_PRIVATE_BUS=1 go test -tags=integration ./internal/...
 ```
 
-See `docs/superpowers/specs/2026-08-20-bluepost-read-only-design.md` for the protocol and security design.
+See the [protocol and security design](docs/superpowers/specs/2026-08-20-bluepost-read-only-design.md),
+the [SMS notification design](docs/superpowers/specs/2026-08-20-sms-notifications-design.md),
+and the [SMS authentication code research](docs/research/2026-08-20-sms-otp-formats.md).

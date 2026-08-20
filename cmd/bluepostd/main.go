@@ -13,6 +13,7 @@ import (
 	"github.com/s0up4200/bluepost/internal/backend"
 	"github.com/s0up4200/bluepost/internal/bus"
 	appconfig "github.com/s0up4200/bluepost/internal/config"
+	"github.com/s0up4200/bluepost/internal/desktop"
 	"github.com/s0up4200/bluepost/internal/obex"
 	"github.com/s0up4200/bluepost/internal/storage"
 	"github.com/s0up4200/bluepost/internal/textsafe"
@@ -70,11 +71,13 @@ func run() int {
 		configuration.RuntimeDir,
 	)
 	profiles := obex.NewProfiles(sessions, mapAPI, pbapAPI, worker)
+	notifier := desktop.NewNotifier(os.Stderr)
 	application = backend.New(backend.Config{
 		Phone:    configuration.Phone,
 		StateDir: configuration.StateDir,
 		Keys:     storage.Keyring{},
 		Profiles: profiles,
+		Notify:   notifier.Notify,
 	})
 
 	parent, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
