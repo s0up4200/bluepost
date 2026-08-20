@@ -52,6 +52,17 @@ func TestParseUnfoldsLinesAndDeduplicatesAddresses(t *testing.T) {
 	}
 }
 
+func TestUnfoldLinesDoesNotAllocatePerContinuation(t *testing.T) {
+	fixture := "FN:A\n" + strings.Repeat(" x\n", 1_000)
+	lines := unfoldLines(fixture)
+	if len(lines) == 0 || lines[0] != "FN:A"+strings.Repeat("x", 1_000) {
+		t.Fatal("folded line was not preserved")
+	}
+	if allocations := testing.AllocsPerRun(5, func() { unfoldLines(fixture) }); allocations > 50 {
+		t.Fatalf("allocations %.0f, want at most 50", allocations)
+	}
+}
+
 func TestParseKeepsAmbiguousNamesAsSeparateContacts(t *testing.T) {
 	t.Parallel()
 

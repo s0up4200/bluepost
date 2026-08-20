@@ -163,12 +163,20 @@ func unfoldLines(blob string) []string {
 	blob = strings.ReplaceAll(blob, "\r", "\n")
 	raw := strings.Split(blob, "\n")
 	lines := make([]string, 0, len(raw))
-	for _, line := range raw {
-		if len(line) > 0 && (line[0] == ' ' || line[0] == '\t') && len(lines) != 0 {
-			lines[len(lines)-1] += line[1:]
+	for index := 0; index < len(raw); {
+		line := raw[index]
+		index++
+		if index == len(raw) || len(raw[index]) == 0 || raw[index][0] != ' ' && raw[index][0] != '\t' {
+			lines = append(lines, line)
 			continue
 		}
-		lines = append(lines, line)
+		var unfolded strings.Builder
+		unfolded.WriteString(line)
+		for index < len(raw) && len(raw[index]) > 0 && (raw[index][0] == ' ' || raw[index][0] == '\t') {
+			unfolded.WriteString(raw[index][1:])
+			index++
+		}
+		lines = append(lines, unfolded.String())
 	}
 	return lines
 }
