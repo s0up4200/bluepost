@@ -84,6 +84,51 @@ func TestMAPHandleAddedFetchesOnlyItsSessionMessage(t *testing.T) {
 	}
 }
 
+func TestMAPHandleAddedCorrectsOnlyRecentTwelveHourTimestamp(t *testing.T) {
+	t.Parallel()
+
+	received := time.Now().Truncate(time.Second)
+	got := handleMessageTimestamp(t, received.Add(-12*time.Hour).Format("20060102T150405"))
+	if !got.Equal(received) {
+		t.Fatalf("recent timestamp %v, want %v", got, received)
+	}
+
+	stale := received.Add(-13 * time.Hour)
+	got = handleMessageTimestamp(t, stale.Format("20060102T150405"))
+	if !got.Equal(stale) {
+		t.Fatalf("stale timestamp %v, want %v", got, stale)
+	}
+}
+
+func handleMessageTimestamp(t *testing.T, timestamp string) time.Time {
+	t.Helper()
+
+	runtimeDir := filepath.Join(t.TempDir(), "runtime")
+	sessions := &Sessions{mapPath: "/org/bluez/obex/client/session1"}
+	transport := &fakeTransport{}
+	transport.handler = func(call transportCall) ([]any, error) {
+		if err := os.WriteFile(call.args[0].(string), []byte(incomingBMessage), 0o600); err != nil {
+			return nil, err
+		}
+		return []any{
+			dbus.ObjectPath("/org/bluez/obex/client/session1/transfer1"),
+			map[string]dbus.Variant{"Status": dbus.MakeVariant("complete")},
+		}, nil
+	}
+	client := NewMAP(transport, sessions, nil, runtimeDir, nil)
+	message, err := client.HandleAdded(
+		context.Background(),
+		"/org/bluez/obex/client/session1/message42",
+		map[string]map[string]dbus.Variant{
+			messageInterface: {"Timestamp": dbus.MakeVariant(timestamp)},
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return message.Timestamp
+}
+
 func TestMAPHandleAddedRemovesTemporaryFileAfterParseError(t *testing.T) {
 	t.Parallel()
 

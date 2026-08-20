@@ -28,6 +28,8 @@ const (
 
 var ErrForeignMessage = errors.New("MAP message belongs to another session")
 
+const liveTimestampWindow = 15 * time.Minute
+
 type MAP struct {
 	transport  Transport
 	sessions   *Sessions
@@ -57,6 +59,7 @@ func (client *MAP) HandleAdded(
 	path dbus.ObjectPath,
 	interfaces map[string]map[string]dbus.Variant,
 ) (model.Message, error) {
+	received := time.Now()
 	mapPath, ok := client.sessions.MapPath()
 	if !ok || !strings.HasPrefix(string(path), string(mapPath)+"/") {
 		return model.Message{}, ErrForeignMessage
@@ -126,7 +129,7 @@ func (client *MAP) HandleAdded(
 		SenderPhoneNorm: normalized,
 		ContactName:     boundedText(contactName, protocol.MaxContactNameChars),
 		Body:            parsed.Body,
-		Timestamp:       parseMAPTime(variantString(properties["Timestamp"])),
+		Timestamp:       parseLiveMAPTime(variantString(properties["Timestamp"]), received),
 		Read:            read,
 	}, nil
 }
@@ -265,6 +268,20 @@ func parseMAPTime(value string) time.Time {
 		return parsed
 	}
 	return time.Time{}
+}
+
+func parseLiveMAPTime(value string, received time.Time) time.Time {
+	timestamp := parseMAPTime(value)
+	if len(value) != len("20060102T150405") {
+		return timestamp
+	}
+	for _, shift := range []time.Duration{0, -12 * time.Hour, 12 * time.Hour} {
+		candidate := timestamp.Add(shift)
+		if candidate.Sub(received).Abs() <= liveTimestampWindow {
+			return candidate
+		}
+	}
+	return timestamp
 }
 
 func boundedText(value string, maximum int) string {
