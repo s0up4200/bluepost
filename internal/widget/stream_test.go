@@ -39,7 +39,7 @@ func (source *fakeSource) Events(
 	return append([]model.Message(nil), source.messages...), source.err
 }
 
-func TestBuildSortsFiveMessagesAndSelectsClipboardText(t *testing.T) {
+func TestBuildShowsLatestArrivalsAndSelectsClipboardText(t *testing.T) {
 	t.Parallel()
 
 	base := time.Date(2026, time.August, 20, 20, 0, 0, 0, time.UTC)
@@ -52,11 +52,10 @@ func TestBuildSortsFiveMessagesAndSelectsClipboardText(t *testing.T) {
 		},
 		messages: []model.Message{
 			{Handle: "old", SenderAddress: "+4700000000", Body: "Old", Timestamp: base.Add(-time.Hour)},
-			{Handle: "otp", ContactName: "Stripe", SenderAddress: "+4711111111", Body: "Your Stripe verification code is 482731.", Timestamp: base.Add(5 * time.Minute)},
-			{Handle: "normal", SenderAddress: "+4722222222", Body: "Dinner is at seven.", Timestamp: base.Add(4 * time.Minute)},
-			{Handle: "third", SenderAddress: "+4733333333", Body: "Third", Timestamp: base.Add(3 * time.Minute)},
-			{Handle: "second", SenderAddress: "+4744444444", Body: "Second", Timestamp: base.Add(2 * time.Minute)},
 			{Handle: "first", SenderAddress: "+4755555555", Body: "First", Timestamp: base.Add(time.Minute)},
+			{Handle: "second", SenderAddress: "+4744444444", Body: "Second", Timestamp: base.Add(2 * time.Minute)},
+			{Handle: "normal", SenderAddress: "+4722222222", Body: "Dinner is at seven.", Timestamp: base.Add(4 * time.Minute)},
+			{Handle: "otp", ContactName: "Stripe", SenderAddress: "+4711111111", Body: "Your Stripe verification code is 482731."},
 		},
 	}
 
@@ -74,7 +73,7 @@ func TestBuildSortsFiveMessagesAndSelectsClipboardText(t *testing.T) {
 		t.Fatalf("message count %d", len(got.Messages))
 	}
 	if got.Messages[0].Handle != "otp" || got.Messages[0].Sender != "Stripe" ||
-		got.Messages[0].Time != "20:05" || got.Messages[0].CopyText != "482731" ||
+		got.Messages[0].Time != "Unknown time" || got.Messages[0].CopyText != "482731" ||
 		got.Messages[0].CopyKind != "code" {
 		t.Fatalf("OTP message %#v", got.Messages[0])
 	}
@@ -82,7 +81,7 @@ func TestBuildSortsFiveMessagesAndSelectsClipboardText(t *testing.T) {
 		got.Messages[1].CopyText != "Dinner is at seven." || got.Messages[1].CopyKind != "message" {
 		t.Fatalf("normal message %#v", got.Messages[1])
 	}
-	if got.Messages[4].Handle != "first" {
+	if got.Messages[4].Handle != "old" {
 		t.Fatalf("last message %#v", got.Messages[4])
 	}
 }

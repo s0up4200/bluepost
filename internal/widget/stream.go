@@ -50,12 +50,10 @@ func Build(ctx context.Context, source Source) (Snapshot, error) {
 		return Snapshot{}, errors.New("Could not get recent messages")
 	}
 	messages = append([]model.Message(nil), messages...)
-	slices.SortStableFunc(messages, func(left, right model.Message) int {
-		return right.Timestamp.Compare(left.Timestamp)
-	})
 	if len(messages) > messageLimit {
-		messages = messages[:messageLimit]
+		messages = messages[len(messages)-messageLimit:]
 	}
+	slices.Reverse(messages)
 
 	result := Snapshot{Status: status, Messages: make([]Message, 0, len(messages))}
 	for _, message := range messages {
