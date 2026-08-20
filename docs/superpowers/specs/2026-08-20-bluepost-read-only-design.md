@@ -30,7 +30,7 @@ The first release does not support other distributions or architectures.
 | Item | Value |
 | --- | --- |
 | Project and CLI | `bluepost` |
-| Daemon | `bluepostd` |
+| Daemon command | `bluepost daemon` |
 | D-Bus bus name | `io.github.s0up4200.Bluepost` |
 | D-Bus object path | `/io/github/s0up4200/Bluepost` |
 | Read interface | `io.github.s0up4200.Bluepost.Messages1` |
@@ -88,14 +88,14 @@ iPhone
 BlueZ and obexd
   | local D-Bus
   v
-bluepostd ---- encrypted snapshots
-  |                   |
-  | session D-Bus     `-- key in GNOME Keyring
+bluepost daemon ---- encrypted snapshots
+  |                         |
+  | session D-Bus           `-- key in GNOME Keyring
   v
-bluepost CLI
+bluepost client commands
 ```
 
-`bluepostd` owns every Bluetooth and storage operation.
+`bluepost daemon` owns every Bluetooth and storage operation.
 The daemon keeps the OBEX sessions open while it runs.
 
 `bluepost` is a short-lived D-Bus client.
@@ -117,7 +117,7 @@ The daemon calls the existing `/usr/bin/secret-tool` executable.
 
 ## Configuration
 
-`bluepostd` requires one iPhone MAC address.
+`bluepost daemon` requires one iPhone MAC address.
 The daemon reads the address from `--phone` or `BLUEPOST_PHONE`.
 The command-line value takes precedence.
 
@@ -400,7 +400,7 @@ The final local checks are:
 ```text
 go test -race ./...
 go vet ./...
-go build ./cmd/bluepost ./cmd/bluepostd
+go build ./cmd/bluepost
 ```
 
 A live hardware check runs the binaries from the source tree.

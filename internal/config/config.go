@@ -2,9 +2,7 @@ package config
 
 import (
 	"errors"
-	"flag"
 	"fmt"
-	"io"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -18,18 +16,8 @@ type Config struct {
 	RuntimeDir string
 }
 
-func Load(args []string, getenv func(string) string) (Config, error) {
-	flags := flag.NewFlagSet("bluepostd", flag.ContinueOnError)
-	flags.SetOutput(io.Discard)
-	phoneFlag := flags.String("phone", "", "paired and trusted iPhone MAC address")
-	if err := flags.Parse(args); err != nil {
-		return Config{}, err
-	}
-	if flags.NArg() != 0 {
-		return Config{}, errors.New("bluepostd does not accept positional arguments")
-	}
-
-	phone := strings.ToUpper(strings.TrimSpace(*phoneFlag))
+func Load(phoneFlag string, getenv func(string) string) (Config, error) {
+	phone := strings.ToUpper(strings.TrimSpace(phoneFlag))
 	if phone == "" {
 		phone = strings.ToUpper(strings.TrimSpace(getenv("BLUEPOST_PHONE")))
 	}

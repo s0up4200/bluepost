@@ -17,7 +17,7 @@ import (
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr, func() (*dbus.Conn, error) {
 		return dbus.ConnectSessionBus()
-	}))
+	}, newDaemonCommand(os.Stderr, os.Getenv, runDaemon)))
 }
 
 func run(
@@ -25,12 +25,17 @@ func run(
 	stdout io.Writer,
 	stderr io.Writer,
 	connect func() (*dbus.Conn, error),
+	daemon *cobra.Command,
 ) int {
 	client := bus.NewClient(nil)
 	var connection *dbus.Conn
 	command := cli.New(client, stdout, stderr)
+	command.AddCommand(daemon)
 	command.SetArgs(args)
-	command.PersistentPreRunE = func(*cobra.Command, []string) error {
+	command.PersistentPreRunE = func(selected *cobra.Command, _ []string) error {
+		if selected == daemon {
+			return nil
+		}
 		var err error
 		connection, err = connect()
 		if err != nil {

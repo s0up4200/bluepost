@@ -9,7 +9,7 @@ func TestLoadRejectsUntrustedPhoneSyntax(t *testing.T) {
 	t.Parallel()
 
 	_, err := Load(
-		[]string{"--phone", "AA:BB;rm -rf"},
+		"AA:BB;rm -rf",
 		testEnv(t.TempDir(), t.TempDir(), ""),
 	)
 	if err == nil {
@@ -23,7 +23,7 @@ func TestLoadUsesFlagBeforeEnvironment(t *testing.T) {
 	stateRoot := t.TempDir()
 	runtimeRoot := t.TempDir()
 	got, err := Load(
-		[]string{"--phone", "aa:bb:cc:dd:ee:ff"},
+		"aa:bb:cc:dd:ee:ff",
 		testEnv(stateRoot, runtimeRoot, "11:22:33:44:55:66"),
 	)
 	if err != nil {
@@ -43,7 +43,7 @@ func TestLoadUsesFlagBeforeEnvironment(t *testing.T) {
 func TestLoadRequiresRuntimeDirectory(t *testing.T) {
 	t.Parallel()
 
-	_, err := Load(nil, testEnv(t.TempDir(), "", "AA:BB:CC:DD:EE:FF"))
+	_, err := Load("", testEnv(t.TempDir(), "", "AA:BB:CC:DD:EE:FF"))
 	if err == nil {
 		t.Fatal("expected missing XDG_RUNTIME_DIR error")
 	}

@@ -10,16 +10,15 @@ Do not use Bluepost as the only way to receive an important message.
 
 ## Current scope
 
-Bluepost provides two programs:
-
-- `bluepostd` receives messages, synchronizes contacts, and owns encrypted storage.
-- `bluepost` reads daemon status, messages, and contacts.
+Bluepost provides one binary.
+`bluepost daemon` receives messages, synchronizes contacts, and owns encrypted storage.
+The other `bluepost` commands read daemon status, messages, and contacts.
 
 The daemon stores new messages that arrive while it is connected.
 A live inbox query reads recent MAP entries from the iPhone.
 The live entries can contain only the short subject text that the iPhone provides.
 
-`bluepostd` shows the full text of each new SMS in a desktop notification.
+`bluepost daemon` shows the full text of each new SMS in a desktop notification.
 A left click copies one clear authentication code when the message contains one.
 Bluepost never copies ordinary SMS text.
 
@@ -81,12 +80,12 @@ From the repository root, run:
 go mod verify
 go test ./...
 go build -o bluepost ./cmd/bluepost
-go build -o bluepostd ./cmd/bluepostd
 ```
 
 The build uses the versions and checksums in `go.mod` and `go.sum`.
 Cobra is the only CLI framework.
 The other direct dependency is godbus for local D-Bus communication.
+Place the resulting `bluepost` binary on `PATH` to use it from any directory.
 
 ## Run
 
@@ -94,7 +93,7 @@ Start the daemon in one terminal.
 Replace the example address with the iPhone Bluetooth address:
 
 ```bash
-./bluepostd --phone AA:BB:CC:DD:EE:FF
+./bluepost daemon --phone AA:BB:CC:DD:EE:FF
 ```
 
 You can also set `BLUEPOST_PHONE`.

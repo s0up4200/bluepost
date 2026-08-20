@@ -3,12 +3,13 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/godbus/dbus/v5"
+	"github.com/spf13/cobra"
 
 	"github.com/s0up4200/bluepost/internal/backend"
 	"github.com/s0up4200/bluepost/internal/bus"
@@ -16,33 +17,43 @@ import (
 	"github.com/s0up4200/bluepost/internal/desktop"
 	"github.com/s0up4200/bluepost/internal/obex"
 	"github.com/s0up4200/bluepost/internal/storage"
-	"github.com/s0up4200/bluepost/internal/textsafe"
 )
 
-func main() {
-	os.Exit(run())
+func newDaemonCommand(
+	errors io.Writer,
+	getenv func(string) string,
+	run func(context.Context, appconfig.Config, io.Writer) error,
+) *cobra.Command {
+	var phone string
+	command := &cobra.Command{
+		Use:   "daemon",
+		Short: "Receive messages and synchronize contacts",
+		Args:  cobra.NoArgs,
+		RunE: func(command *cobra.Command, _ []string) error {
+			command.Root().SilenceUsage = true
+			configuration, err := appconfig.Load(phone, getenv)
+			if err != nil {
+				return err
+			}
+			return run(command.Context(), configuration, errors)
+		},
+	}
+	command.Flags().StringVar(&phone, "phone", "", "paired and trusted iPhone MAC address")
+	return command
 }
 
-func run() int {
-	configuration, err := appconfig.Load(os.Args[1:], os.Getenv)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, textsafe.OneLine(err.Error()))
-		return 2
-	}
+func runDaemon(ctx context.Context, configuration appconfig.Config, errorsOut io.Writer) error {
 	if err := obex.PrepareRuntimeDir(configuration.RuntimeDir); err != nil {
-		fmt.Fprintln(os.Stderr, textsafe.OneLine(err.Error()))
-		return 1
+		return err
 	}
 	systemBus, err := dbus.ConnectSystemBus()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Could not connect to the system D-Bus")
-		return 1
+		return errors.New("Could not connect to the system D-Bus")
 	}
 	defer systemBus.Close()
 	sessionBus, err := dbus.ConnectSessionBus()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Could not connect to the user D-Bus")
-		return 1
+		return errors.New("Could not connect to the user D-Bus")
 	}
 	defer sessionBus.Close()
 
@@ -71,7 +82,7 @@ func run() int {
 		configuration.RuntimeDir,
 	)
 	profiles := obex.NewProfiles(sessions, mapAPI, pbapAPI, worker)
-	notifier := desktop.NewNotifier(os.Stderr)
+	notifier := desktop.NewNotifier(errorsOut)
 	application = backend.New(backend.Config{
 		Phone:    configuration.Phone,
 		StateDir: configuration.StateDir,
@@ -80,30 +91,28 @@ func run() int {
 		Notify:   notifier.Notify,
 	})
 
-	parent, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	parent, stopSignals := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stopSignals()
-	ctx, cancel := context.WithCancel(parent)
+	runContext, cancel := context.WithCancel(parent)
 	defer cancel()
 	serverResult := make(chan error, 1)
 	backendResult := make(chan error, 1)
-	go func() { serverResult <- bus.Serve(ctx, sessionBus, application) }()
-	go func() { backendResult <- application.Run(ctx) }()
+	go func() { serverResult <- bus.Serve(runContext, sessionBus, application) }()
+	go func() { backendResult <- application.Run(runContext) }()
 
 	serverDone := false
 	backendDone := false
-	exitCode := 0
+	var result error
 	select {
 	case err := <-serverResult:
 		serverDone = true
 		if !errors.Is(err, context.Canceled) {
-			fmt.Fprintln(os.Stderr, textsafe.OneLine(err.Error()))
-			exitCode = 1
+			result = err
 		}
 	case err := <-backendResult:
 		backendDone = true
 		if !errors.Is(err, context.Canceled) {
-			fmt.Fprintln(os.Stderr, "The Bluepost backend stopped")
-			exitCode = 1
+			result = errors.New("The Bluepost backend stopped")
 		}
 	case <-parent.Done():
 	}
@@ -114,5 +123,5 @@ func run() int {
 	if !backendDone {
 		<-backendResult
 	}
-	return exitCode
+	return result
 }

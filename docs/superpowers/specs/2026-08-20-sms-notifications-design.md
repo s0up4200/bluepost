@@ -10,7 +10,7 @@ If Bluepost finds no clear code, a left click does not copy message text.
 
 ## Scope
 
-This change adds notification support to `bluepostd`.
+This change adds notification support to `bluepost daemon`.
 It does not add a graphical application, message replies, or notification settings.
 
 The first version supports current Omarchy installations.
