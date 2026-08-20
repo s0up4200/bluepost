@@ -417,6 +417,39 @@ func TestPollMessagesKeepsFullBodyForKnownHandle(t *testing.T) {
 	}
 }
 
+func TestPollMessagesStoresBackfillOldestFirst(t *testing.T) {
+	t.Parallel()
+
+	base := time.Date(2026, 8, 20, 18, 0, 0, 0, time.Local)
+	stop := errors.New("stop polling")
+	profiles := &fakeProfiles{recent: []model.Message{
+		{Handle: "newest", Timestamp: base.Add(2 * time.Minute)},
+		{Handle: "oldest", Timestamp: base},
+		{Handle: "middle", Timestamp: base.Add(time.Minute)},
+	}}
+	service := notificationBackend(t, base.Add(2*time.Minute), nil)
+	service.config.Profiles = profiles
+	waits := 0
+	service.wait = func(context.Context, time.Duration) error {
+		waits++
+		if waits == 1 {
+			return nil
+		}
+		return stop
+	}
+	if err := service.pollMessages(context.Background()); !errors.Is(err, stop) {
+		t.Fatalf("poll error %v", err)
+	}
+	messages, err := service.ListEvents([]string{"sms_received"}, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(messages) != 3 || messages[0].Handle != "oldest" ||
+		messages[1].Handle != "middle" || messages[2].Handle != "newest" {
+		t.Fatalf("messages %#v", messages)
+	}
+}
+
 func TestAcceptMessageDoesNotNotifyStaleMessage(t *testing.T) {
 	t.Parallel()
 

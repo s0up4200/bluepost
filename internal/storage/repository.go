@@ -119,9 +119,10 @@ func (repository *Repository) appendMessage(message model.Message, replace bool)
 
 	repository.mu.Lock()
 	defer repository.mu.Unlock()
-	candidate := make([]model.Message, 0, len(repository.messages)+1)
-	sizes := make([]int, 0, len(repository.messageSizes)+1)
+	candidate := append([]model.Message(nil), repository.messages...)
+	sizes := append([]int(nil), repository.messageSizes...)
 	created := true
+	replacedIndex := -1
 	// ponytail: History is bounded; add a handle index only if replay latency becomes measurable.
 	for index, existing := range repository.messages {
 		if message.Handle != "" && existing.Handle == message.Handle {
@@ -129,19 +130,28 @@ func (repository *Repository) appendMessage(message model.Message, replace bool)
 			if !replace {
 				return false, nil
 			}
-			continue
+			candidate[index] = message
+			sizes[index] = len(encodedMessage)
+			replacedIndex = index
+			break
 		}
-		candidate = append(candidate, existing)
-		sizes = append(sizes, repository.messageSizes[index])
 	}
-	candidate = append(candidate, message)
-	sizes = append(sizes, len(encodedMessage))
+	if created {
+		candidate = append(candidate, message)
+		sizes = append(sizes, len(encodedMessage))
+	}
 	for len(candidate) > repository.maxHistoryRecords || historyJSONSize(sizes) > repository.maxHistoryBytes {
 		if len(candidate) == 1 {
 			return false, errors.New("message cannot fit in the encrypted history")
 		}
+		if replacedIndex == 0 {
+			return false, errors.New("message replacement exceeds the history retention limit")
+		}
 		candidate = candidate[1:]
 		sizes = sizes[1:]
+		if replacedIndex > 0 {
+			replacedIndex--
+		}
 	}
 	blob, err := json.Marshal(historyEnvelope{Schema: snapshotSchema, Records: candidate})
 	if err != nil {

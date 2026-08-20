@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -205,6 +206,9 @@ func (backend *Backend) pollMessages(ctx context.Context) error {
 			}
 			continue
 		}
+		slices.SortStableFunc(messages, func(left, right model.Message) int {
+			return left.Timestamp.Compare(right.Timestamp)
+		})
 		missed := false
 		for _, message := range messages {
 			created, err := backend.storeMessage(ctx, message, true)
