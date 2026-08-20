@@ -25,7 +25,7 @@ func TestRepositoryReopensMessagesAndContacts(t *testing.T) {
 		Timestamp:     time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC),
 	}
 	contacts := []model.Contact{{Name: "Jane", Phones: []string{"4712345678"}}}
-	if err := repository.AppendMessage(message); err != nil {
+	if _, err := repository.AppendMessage(message); err != nil {
 		t.Fatal(err)
 	}
 	if err := repository.ReplaceContacts(contacts); err != nil {
@@ -53,7 +53,7 @@ func TestRepositoryRemovesOldestMessageAtRecordLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, body := range []string{"one", "two", "three"} {
-		if err := repository.AppendMessage(model.Message{Handle: body, Body: body}); err != nil {
+		if _, err := repository.AppendMessage(model.Message{Handle: body, Body: body}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -70,11 +70,13 @@ func TestRepositoryReplacesReplayedMessageHandle(t *testing.T) {
 	if err := repository.Open(); err != nil {
 		t.Fatal(err)
 	}
-	if err := repository.AppendMessage(model.Message{Handle: "message7", Body: "old"}); err != nil {
-		t.Fatal(err)
+	created, err := repository.AppendMessage(model.Message{Handle: "message7", Body: "old"})
+	if err != nil || !created {
+		t.Fatalf("first append = %v, %v", created, err)
 	}
-	if err := repository.AppendMessage(model.Message{Handle: "message7", Body: "new"}); err != nil {
-		t.Fatal(err)
+	created, err = repository.AppendMessage(model.Message{Handle: "message7", Body: "new"})
+	if err != nil || created {
+		t.Fatalf("replayed append = %v, %v", created, err)
 	}
 	got := repository.Messages(20)
 	if len(got) != 1 || got[0].Body != "new" {
@@ -90,8 +92,9 @@ func TestRepositoryKeepsMessagesWithEmptyHandlesDistinct(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, body := range []string{"one", "two"} {
-		if err := repository.AppendMessage(model.Message{Body: body}); err != nil {
-			t.Fatal(err)
+		created, err := repository.AppendMessage(model.Message{Body: body})
+		if err != nil || !created {
+			t.Fatalf("append = %v, %v", created, err)
 		}
 	}
 	if got := repository.Messages(20); len(got) != 2 {
@@ -105,14 +108,18 @@ func TestRepositoryKeepsReplayedMessageAfterFailedReplacement(t *testing.T) {
 	if err := repository.Open(); err != nil {
 		t.Fatal(err)
 	}
-	if err := repository.AppendMessage(model.Message{Handle: "message7", Body: "old"}); err != nil {
+	if _, err := repository.AppendMessage(model.Message{Handle: "message7", Body: "old"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Chmod(snapshot.Dir, 0o500); err != nil {
 		t.Fatal(err)
 	}
-	if err := repository.AppendMessage(model.Message{Handle: "message7", Body: "new"}); err == nil {
+	created, err := repository.AppendMessage(model.Message{Handle: "message7", Body: "new"})
+	if err == nil {
 		t.Fatal("expected replacement error")
+	}
+	if created {
+		t.Fatal("failed replacement reported a new message")
 	}
 	if err := os.Chmod(snapshot.Dir, 0o700); err != nil {
 		t.Fatal(err)
@@ -138,7 +145,7 @@ func TestRepositoryRemovesOldestMessageAtByteLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, handle := range []string{"one", "two", "three"} {
-		if err := repository.AppendMessage(model.Message{
+		if _, err := repository.AppendMessage(model.Message{
 			Handle: handle,
 			Body:   strings.Repeat(handle, 20),
 		}); err != nil {

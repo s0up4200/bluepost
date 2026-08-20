@@ -99,22 +99,24 @@ func (repository *Repository) Open() error {
 	return nil
 }
 
-func (repository *Repository) AppendMessage(message model.Message) error {
+func (repository *Repository) AppendMessage(message model.Message) (bool, error) {
 	if err := validateMessage(message); err != nil {
-		return err
+		return false, err
 	}
 	encodedMessage, err := json.Marshal(message)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	repository.mu.Lock()
 	defer repository.mu.Unlock()
 	candidate := make([]model.Message, 0, len(repository.messages)+1)
 	sizes := make([]int, 0, len(repository.messageSizes)+1)
+	created := true
 	// ponytail: History is bounded; add a handle index only if replay latency becomes measurable.
 	for index, existing := range repository.messages {
 		if message.Handle != "" && existing.Handle == message.Handle {
+			created = false
 			continue
 		}
 		candidate = append(candidate, existing)
@@ -124,24 +126,24 @@ func (repository *Repository) AppendMessage(message model.Message) error {
 	sizes = append(sizes, len(encodedMessage))
 	for len(candidate) > repository.maxHistoryRecords || historyJSONSize(sizes) > repository.maxHistoryBytes {
 		if len(candidate) == 1 {
-			return errors.New("message cannot fit in the encrypted history")
+			return false, errors.New("message cannot fit in the encrypted history")
 		}
 		candidate = candidate[1:]
 		sizes = sizes[1:]
 	}
 	blob, err := json.Marshal(historyEnvelope{Schema: snapshotSchema, Records: candidate})
 	if err != nil {
-		return err
+		return false, err
 	}
 	if len(blob) > repository.maxHistoryBytes {
-		return errors.New("history encoding exceeds the byte limit")
+		return false, errors.New("history encoding exceeds the byte limit")
 	}
 	if err := repository.snapshot.Save(HistoryPurpose, blob); err != nil {
-		return err
+		return false, err
 	}
 	repository.messages = candidate
 	repository.messageSizes = sizes
-	return nil
+	return created, nil
 }
 
 func (repository *Repository) Messages(limit int) []model.Message {

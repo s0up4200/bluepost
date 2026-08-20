@@ -34,6 +34,7 @@ type Config struct {
 	StateDir string
 	Keys     KeySource
 	Profiles ProfileClient
+	Notify   func(context.Context, model.Message)
 }
 
 type Backend struct {
@@ -47,7 +48,13 @@ type Backend struct {
 	historyChanged func(uint64)
 	statusChanged  func()
 	wait           func(context.Context, time.Duration) error
+	now            func() time.Time
 }
+
+const (
+	notificationMaxAge     = 5 * time.Minute
+	notificationFutureSkew = time.Minute
+)
 
 func New(config Config) *Backend {
 	return &Backend{
@@ -59,6 +66,7 @@ func New(config Config) *Backend {
 			Phone:   maskPhone(config.Phone),
 		},
 		wait: waitContext,
+		now:  time.Now,
 	}
 }
 
@@ -131,7 +139,9 @@ func (backend *Backend) Run(ctx context.Context) error {
 		connected = true
 		mapReady, pbapReady := backend.config.Profiles.Health()
 		backend.setConnectionState("ready", "MAP and PBAP sessions are available", mapReady, pbapReady)
-		err = backend.config.Profiles.Watch(ctx, backend.acceptMessage)
+		err = backend.config.Profiles.Watch(ctx, func(message model.Message) error {
+			return backend.acceptMessage(ctx, message)
+		})
 		if ctx.Err() != nil {
 			backend.closeProfiles(true)
 			backend.setConnectionState("stopped", "The daemon stopped", false, false)
@@ -265,7 +275,7 @@ func (backend *Backend) SetSignals(historyChanged func(uint64), statusChanged fu
 	backend.mu.Unlock()
 }
 
-func (backend *Backend) acceptMessage(message model.Message) error {
+func (backend *Backend) acceptMessage(ctx context.Context, message model.Message) error {
 	repository, err := backend.unlockedRepository()
 	if err != nil {
 		return err
@@ -273,14 +283,26 @@ func (backend *Backend) acceptMessage(message model.Message) error {
 	if message.Kind == "" {
 		message.Kind = "sms_received"
 	}
-	if err := repository.AppendMessage(message); err != nil {
+	created, err := repository.AppendMessage(message)
+	if err != nil {
 		if errors.Is(err, storage.ErrLocked) {
 			backend.lock(err)
 		}
 		return err
 	}
 	backend.emitHistoryChanged()
+	if created && backend.config.Notify != nil && recentMessage(message.Timestamp, backend.now()) {
+		backend.config.Notify(ctx, message)
+	}
 	return nil
+}
+
+func recentMessage(timestamp, now time.Time) bool {
+	if timestamp.IsZero() {
+		return true
+	}
+	age := now.Sub(timestamp)
+	return age >= -notificationFutureSkew && age <= notificationMaxAge
 }
 
 func (backend *Backend) emitHistoryChanged() {

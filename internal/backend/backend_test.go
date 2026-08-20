@@ -230,6 +230,117 @@ func TestSyncContactsUpdatesSenderResolution(t *testing.T) {
 	}
 }
 
+func TestAcceptMessageStoresBeforeNotification(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 8, 20, 18, 0, 0, 0, time.UTC)
+	stored := false
+	var service *Backend
+	service = notificationBackend(t, now, func(context.Context, model.Message) {
+		messages, err := service.ListEvents([]string{"sms_received"}, 20)
+		stored = err == nil && len(messages) == 1 && messages[0].Handle == "message1"
+	})
+	if err := service.acceptMessage(context.Background(), model.Message{
+		Handle: "message1", Body: "hello", Timestamp: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !stored {
+		t.Fatal("notification started before storage completed")
+	}
+}
+
+func TestAcceptMessageDoesNotNotifyReplayedHandle(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 8, 20, 18, 0, 0, 0, time.UTC)
+	count := 0
+	service := notificationBackend(t, now, func(context.Context, model.Message) { count++ })
+	message := model.Message{Handle: "message1", Body: "hello", Timestamp: now}
+	if err := service.acceptMessage(context.Background(), message); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.acceptMessage(context.Background(), message); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("notification count %d", count)
+	}
+}
+
+func TestAcceptMessageDoesNotNotifyStaleMessage(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 8, 20, 18, 0, 0, 0, time.UTC)
+	count := 0
+	service := notificationBackend(t, now, func(context.Context, model.Message) { count++ })
+	err := service.acceptMessage(context.Background(), model.Message{
+		Handle: "old", Body: "hello", Timestamp: now.Add(-5*time.Minute - time.Nanosecond),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("notification count %d", count)
+	}
+}
+
+func TestAcceptMessageAcceptsTimestampBoundariesAndMissingTimestamp(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 8, 20, 18, 0, 0, 0, time.UTC)
+	count := 0
+	service := notificationBackend(t, now, func(context.Context, model.Message) { count++ })
+	for _, message := range []model.Message{
+		{Handle: "old-boundary", Timestamp: now.Add(-5 * time.Minute)},
+		{Handle: "future", Timestamp: now.Add(time.Minute)},
+		{Handle: "missing"},
+	} {
+		if err := service.acceptMessage(context.Background(), message); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if count != 3 {
+		t.Fatalf("notification count %d", count)
+	}
+}
+
+func TestAcceptMessageDoesNotNotifyExcessiveFutureTimestamp(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 8, 20, 18, 0, 0, 0, time.UTC)
+	count := 0
+	service := notificationBackend(t, now, func(context.Context, model.Message) { count++ })
+	err := service.acceptMessage(context.Background(), model.Message{
+		Handle: "future", Timestamp: now.Add(time.Minute + time.Nanosecond),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("notification count %d", count)
+	}
+}
+
+func notificationBackend(
+	t *testing.T,
+	now time.Time,
+	notify func(context.Context, model.Message),
+) *Backend {
+	t.Helper()
+	service := New(Config{
+		StateDir: filepath.Join(t.TempDir(), "state"),
+		Keys:     fixedKeySource(0x35),
+		Profiles: &fakeProfiles{},
+		Notify:   notify,
+	})
+	service.now = func() time.Time { return now }
+	if err := service.Initialize(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	return service
+}
+
 func fixedKeySource(value byte) keySourceFunc {
 	return func(context.Context, bool) ([32]byte, error) {
 		var key [32]byte
