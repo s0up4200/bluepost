@@ -1,0 +1,13 @@
+[Unit]
+Description=Bluepost iPhone message bridge
+After=bluetooth.target
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.config/bluepost/environment
+ExecStart=%h/.local/bin/bluepost daemon
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=default.target

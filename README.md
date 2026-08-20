@@ -20,10 +20,12 @@ The live entries can contain only the short subject text that the iPhone provide
 
 `bluepost daemon` shows the full text of each new SMS in a desktop notification.
 A left click copies one clear authentication code when the message contains one.
-Bluepost never copies ordinary SMS text.
+Desktop notification actions never copy ordinary SMS text.
 
 Bluepost cannot send, reply to, delete, or mark a message as read.
-It does not support attachments, reactions, groups, calls, ANCS notifications, or a graphical interface.
+It does not support attachments, reactions, groups, calls, or ANCS notifications.
+The optional Omarchy widget shows connection status and the five newest SMS messages.
+Click a widget message to copy its code or complete body.
 
 ## Requirements
 
@@ -110,8 +112,54 @@ Use the CLI in another terminal:
 ./bluepost contacts jane
 ```
 
-The daemon runs in the foreground.
-This release does not include an installer or a systemd user service.
+The daemon runs in the foreground unless a service manager starts it.
+
+## Automatic start on Omarchy
+
+Build and install the binary:
+
+```bash
+go build -trimpath -o bluepost ./cmd/bluepost
+install -Dm755 bluepost ~/.local/bin/bluepost
+```
+
+Install the systemd user service:
+
+```bash
+install -Dm644 contrib/systemd/bluepost.service ~/.config/systemd/user/bluepost.service
+install -d -m700 ~/.config/bluepost
+printf 'BLUEPOST_PHONE=%s\n' 'AA:BB:CC:DD:EE:FF' >~/.config/bluepost/environment
+chmod 0600 ~/.config/bluepost/environment
+systemctl --user daemon-reload
+systemctl --user enable --now bluepost.service
+```
+
+Replace the example address with the iPhone Bluetooth address.
+The private environment file is `~/.config/bluepost/environment`.
+The service starts `~/.local/bin/bluepost` at login and restarts it after an error.
+
+View the service and Bluepost health:
+
+```bash
+systemctl --user status bluepost.service
+bluepost status
+```
+
+## Omarchy widget
+
+Validate and install the separate plugin:
+
+```bash
+omarchy plugin validate contrib/omarchy-bluepost
+install -d ~/.config/omarchy/plugins/io.github.s0up4200.bluepost
+install -m644 contrib/omarchy-bluepost/manifest.json ~/.config/omarchy/plugins/io.github.s0up4200.bluepost/
+install -m644 contrib/omarchy-bluepost/Panel.qml ~/.config/omarchy/plugins/io.github.s0up4200.bluepost/
+omarchy-shell shell rescanPlugins
+omarchy plugin enable io.github.s0up4200.bluepost --section right --before omarchy.bluetooth
+```
+
+The plugin directory must exist before the rescan.
+This plugin does not modify the stock `omarchy.bluetooth` widget.
 
 ## Storage and security
 
@@ -132,8 +180,8 @@ Decrypted content exists in process memory while the daemon runs.
 
 Omarchy stores its ten most recent notifications as plain JSON.
 These files can contain the sender, the full message body, and an authentication code.
-Bluepost uses `wl-copy --sensitive` to keep authentication codes out of Omarchy clipboard history.
-A copied code remains in the active clipboard until another copy replaces it.
+Bluepost uses `wl-copy --sensitive` to keep copied codes and widget messages out of Omarchy clipboard history.
+Copied text remains in the active clipboard until another copy replaces it.
 Restored notifications do not keep the copy action in this version.
 
 ## Development checks
