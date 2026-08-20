@@ -24,7 +24,6 @@ const (
 	messageAccessInterface    = "org.bluez.obex.MessageAccess1"
 	messageAccessSetFolder    = messageAccessInterface + ".SetFolder"
 	messageAccessListMessages = messageAccessInterface + ".ListMessages"
-	propertiesGetAll          = "org.freedesktop.DBus.Properties.GetAll"
 )
 
 var ErrForeignMessage = errors.New("MAP message belongs to another session")
@@ -220,28 +219,14 @@ func (client *MAP) ListRecent(
 	if len(body) == 0 {
 		return nil, errors.New("MAP list returned an invalid response")
 	}
-	paths, ok := body[0].([]dbus.ObjectPath)
+	entries, ok := body[0].(map[dbus.ObjectPath]map[string]dbus.Variant)
 	if !ok {
-		return nil, errors.New("MAP list returned invalid paths")
+		return nil, errors.New("MAP list returned invalid entries")
 	}
-	if len(paths) > int(limit) {
-		paths = paths[:limit]
-	}
-	messages := make([]model.Message, 0, len(paths))
-	for _, path := range paths {
-		propertiesBody, err := client.transport.Call(
-			ctx,
-			obexDestination,
-			path,
-			propertiesGetAll,
-			messageInterface,
-		)
-		if err != nil || len(propertiesBody) != 1 {
-			continue
-		}
-		properties, ok := propertiesBody[0].(map[string]dbus.Variant)
-		if !ok {
-			continue
+	messages := make([]model.Message, 0, min(len(entries), int(limit)))
+	for path, properties := range entries {
+		if len(messages) == int(limit) {
+			break
 		}
 		sender := variantString(properties["Sender"])
 		if sender == "" {

@@ -63,6 +63,72 @@ func TestRepositoryRemovesOldestMessageAtRecordLimit(t *testing.T) {
 	}
 }
 
+func TestRepositoryReplacesReplayedMessageHandle(t *testing.T) {
+	t.Parallel()
+
+	repository := NewRepository(testSnapshot(t, testKey(0x96)))
+	if err := repository.Open(); err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.AppendMessage(model.Message{Handle: "message7", Body: "old"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.AppendMessage(model.Message{Handle: "message7", Body: "new"}); err != nil {
+		t.Fatal(err)
+	}
+	got := repository.Messages(20)
+	if len(got) != 1 || got[0].Body != "new" {
+		t.Fatalf("messages %#v", got)
+	}
+}
+
+func TestRepositoryKeepsMessagesWithEmptyHandlesDistinct(t *testing.T) {
+	t.Parallel()
+
+	repository := NewRepository(testSnapshot(t, testKey(0x97)))
+	if err := repository.Open(); err != nil {
+		t.Fatal(err)
+	}
+	for _, body := range []string{"one", "two"} {
+		if err := repository.AppendMessage(model.Message{Body: body}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := repository.Messages(20); len(got) != 2 {
+		t.Fatalf("messages %#v", got)
+	}
+}
+
+func TestRepositoryKeepsReplayedMessageAfterFailedReplacement(t *testing.T) {
+	snapshot := testSnapshot(t, testKey(0x98))
+	repository := NewRepository(snapshot)
+	if err := repository.Open(); err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.AppendMessage(model.Message{Handle: "message7", Body: "old"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(snapshot.Dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.AppendMessage(model.Message{Handle: "message7", Body: "new"}); err == nil {
+		t.Fatal("expected replacement error")
+	}
+	if err := os.Chmod(snapshot.Dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if got := repository.Messages(20); len(got) != 1 || got[0].Body != "old" {
+		t.Fatalf("messages %#v", got)
+	}
+	reopened := NewRepository(snapshot)
+	if err := reopened.Open(); err != nil {
+		t.Fatal(err)
+	}
+	if got := reopened.Messages(20); len(got) != 1 || got[0].Body != "old" {
+		t.Fatalf("reopened messages %#v", got)
+	}
+}
+
 func TestRepositoryRemovesOldestMessageAtByteLimit(t *testing.T) {
 	t.Parallel()
 

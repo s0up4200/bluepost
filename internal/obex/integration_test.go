@@ -81,7 +81,7 @@ func (profile *integrationMAP) SetFolder(folder string) *dbus.Error {
 func (profile *integrationMAP) ListMessages(
 	name string,
 	options map[string]dbus.Variant,
-) ([]dbus.ObjectPath, *dbus.Error) {
+) (map[dbus.ObjectPath]map[string]dbus.Variant, *dbus.Error) {
 	if name != "" {
 		return nil, dbus.NewError("org.bluez.obex.Error.InvalidArguments", []any{"invalid name"})
 	}
@@ -89,20 +89,13 @@ func (profile *integrationMAP) ListMessages(
 	profile.mu.Lock()
 	profile.limit = limit
 	profile.mu.Unlock()
-	return []dbus.ObjectPath{integrationMessagePath}, nil
-}
-
-type integrationProperties struct{}
-
-func (*integrationProperties) GetAll(interfaceName string) (map[string]dbus.Variant, *dbus.Error) {
-	if interfaceName != messageInterface {
-		return nil, dbus.NewError("org.freedesktop.DBus.Error.InvalidArgs", []any{"invalid interface"})
-	}
-	return map[string]dbus.Variant{
-		"Sender":    dbus.MakeVariant("+4712345678"),
-		"Subject":   dbus.MakeVariant("hello"),
-		"Timestamp": dbus.MakeVariant("20260820T120102+0200"),
-		"Read":      dbus.MakeVariant(true),
+	return map[dbus.ObjectPath]map[string]dbus.Variant{
+		integrationMessagePath: {
+			"Sender":    dbus.MakeVariant("+4712345678"),
+			"Subject":   dbus.MakeVariant("hello"),
+			"Timestamp": dbus.MakeVariant("20260820T120102+0200"),
+			"Read":      dbus.MakeVariant(true),
+		},
 	}, nil
 }
 
@@ -175,7 +168,6 @@ func TestBlueZProfilesRoundTripOnPrivateBus(t *testing.T) {
 	integrationExport(t, obexConn, obexManager, bluezRoot, objectManagerInterface)
 	integrationExport(t, obexConn, obexClient, obexRoot, "org.bluez.obex.Client1")
 	integrationExport(t, obexConn, mapProfile, integrationMAPPath, messageAccessInterface)
-	integrationExport(t, obexConn, &integrationProperties{}, integrationMessagePath, "org.freedesktop.DBus.Properties")
 	integrationExport(t, obexConn, pbapProfile, integrationPBAPPath, phonebookInterface)
 
 	transport := DBusTransport{Conn: clientConn}

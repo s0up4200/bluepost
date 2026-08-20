@@ -5,6 +5,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/s0up4200/bluepost/internal/model"
 )
@@ -129,6 +130,24 @@ func TestMessagesRemoveTerminalControlCharacters(t *testing.T) {
 		t.Fatal(err)
 	}
 	if strings.ContainsRune(output, '\x1b') || !strings.Contains(output, "hello ⏎ world") {
+		t.Fatalf("output %q", output)
+	}
+}
+
+func TestMessagesPrintNewestTimestampFirst(t *testing.T) {
+	t.Parallel()
+
+	api := &fakeAPI{messages: []model.Message{
+		{Body: "new", Timestamp: time.Date(2026, 8, 20, 18, 48, 0, 0, time.Local)},
+		{Body: "old", Timestamp: time.Date(2026, 8, 19, 9, 0, 0, 0, time.Local)},
+	}}
+	output, err := execute(t, api, "messages")
+	if err != nil {
+		t.Fatal(err)
+	}
+	newIndex := strings.Index(output, "new")
+	oldIndex := strings.Index(output, "old")
+	if newIndex < 0 || oldIndex < 0 || newIndex > oldIndex {
 		t.Fatalf("output %q", output)
 	}
 }

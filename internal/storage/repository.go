@@ -110,8 +110,18 @@ func (repository *Repository) AppendMessage(message model.Message) error {
 
 	repository.mu.Lock()
 	defer repository.mu.Unlock()
-	candidate := append(append([]model.Message(nil), repository.messages...), message)
-	sizes := append(append([]int(nil), repository.messageSizes...), len(encodedMessage))
+	candidate := make([]model.Message, 0, len(repository.messages)+1)
+	sizes := make([]int, 0, len(repository.messageSizes)+1)
+	// ponytail: History is bounded; add a handle index only if replay latency becomes measurable.
+	for index, existing := range repository.messages {
+		if message.Handle != "" && existing.Handle == message.Handle {
+			continue
+		}
+		candidate = append(candidate, existing)
+		sizes = append(sizes, repository.messageSizes[index])
+	}
+	candidate = append(candidate, message)
+	sizes = append(sizes, len(encodedMessage))
 	for len(candidate) > repository.maxHistoryRecords || historyJSONSize(sizes) > repository.maxHistoryBytes {
 		if len(candidate) == 1 {
 			return errors.New("message cannot fit in the encrypted history")

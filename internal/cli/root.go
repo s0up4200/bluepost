@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sort"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -143,8 +144,11 @@ func printMessages(output io.Writer, messages []model.Message) error {
 		_, err := fmt.Fprintln(output, "No messages")
 		return err
 	}
-	for index := len(messages) - 1; index >= 0; index-- {
-		message := messages[index]
+	messages = append([]model.Message(nil), messages...)
+	sort.SliceStable(messages, func(left, right int) bool {
+		return messages[left].Timestamp.After(messages[right].Timestamp)
+	})
+	for _, message := range messages {
 		sender := message.ContactName
 		if sender == "" {
 			sender = message.SenderAddress

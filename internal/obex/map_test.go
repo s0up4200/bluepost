@@ -124,13 +124,13 @@ func TestMAPListRecentUsesBoundedInboxProperties(t *testing.T) {
 		case messageAccessSetFolder:
 			return nil, nil
 		case messageAccessListMessages:
-			return []any{[]dbus.ObjectPath{"/org/bluez/obex/client/session1/message7"}, map[string]dbus.Variant{}}, nil
-		case propertiesGetAll:
-			return []any{map[string]dbus.Variant{
-				"Sender":    dbus.MakeVariant("+4712345678"),
-				"Subject":   dbus.MakeVariant("hello"),
-				"Timestamp": dbus.MakeVariant("20260820T120102"),
-				"Read":      dbus.MakeVariant(true),
+			return []any{map[dbus.ObjectPath]map[string]dbus.Variant{
+				"/org/bluez/obex/client/session1/message7": {
+					"Sender":    dbus.MakeVariant("+4712345678"),
+					"Subject":   dbus.MakeVariant("hello"),
+					"Timestamp": dbus.MakeVariant("20260820T120102"),
+					"Read":      dbus.MakeVariant(true),
+				},
 			}}, nil
 		default:
 			return nil, errors.New("unexpected call: " + call.method)

@@ -33,17 +33,36 @@ The first release supports Arch Linux on x86-64 with:
 - A user D-Bus session
 
 This repository does not install or configure these requirements.
-The current development machine does not have `bluez-obex` installed.
-It also does not have a paired iPhone.
-These two conditions prevent a live phone test on this machine.
+A live test used an iPhone 16 Pro Max on August 20, 2026.
+The test confirmed SMS reception, MAP inbox queries, and PBAP synchronization with 75 contacts.
 
 ## Prepare the iPhone
 
-Pair the iPhone with Linux and mark it as trusted in BlueZ.
+Activate `obexd` before you pair the iPhone:
+
+```bash
+busctl --user introspect org.bluez.obex /org/bluez/obex org.bluez.obex.Client1 >/dev/null
+```
+
+Set the adapter device class to A/V Hands-Free before pairing:
+
+```bash
+sudo /usr/bin/btmgmt --index 0 class 4 8
+```
+
+Replace `0` if the Bluetooth controller uses a different index.
+This setting makes the message permission available on the tested iPhone.
+
+Keep the iPhone unlocked with **Settings → Bluetooth** open.
+Start the pairing from Linux and confirm the same numeric code on both devices.
+Then mark the iPhone as trusted in BlueZ.
+
 On the iPhone, open **Settings → Bluetooth**, select the Linux computer, and enable:
 
 - **Show Message Notifications**
-- **Sync Contacts**
+- **Sync Contacts**, if this option is available
+
+The tested iPhone accepted PBAP contact synchronization before it showed the **Sync Contacts** option.
 
 Keep Bluetooth enabled on both devices.
 Only one computer can own the iPhone MAP connection at one time.
