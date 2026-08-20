@@ -21,7 +21,7 @@ var (
 	weakAfter       = regexp.MustCompile(`(?i)\b([0-9]{4,10})[ \t]+(?:is|er)[ \t]+(?:your|din|ditt)?[ \t]*(?:code|kode)\b`)
 	googleBefore    = regexp.MustCompile(`(?i)\b(?:code|kode)\b` + connector + `(` + candidatePattern + `)`)
 	ambiguousPair   = regexp.MustCompile(`(?i)\b(` + candidatePattern + `)[ \t]+(?:or|and|eller|og)[ \t]+(` + candidatePattern + `)\b`)
-	urlSpan         = regexp.MustCompile(`(?i)(?:https?://|www\.|(?:[a-z0-9-]+\.)+[a-z]{2,}[/?#])[^\s<>"']+`)
+	urlSpan         = regexp.MustCompile(`(?i)(?:[a-z][a-z0-9+.-]*://|www\.|(?:(?:[a-z0-9-]+\.)+[a-z]{2,}|(?:[0-9]{1,3}\.){3}[0-9]{1,3}|localhost|\[[0-9a-f:]+\])(?::[0-9]{1,5})?[/?#])[^\s<>"']+`)
 )
 
 func Extract(body string) (string, bool) {
@@ -69,9 +69,6 @@ func domainBound(text string) (string, bool) {
 }
 
 func contextualCandidates(text string, hasGoogleHash bool) []string {
-	if hasAmbiguousPair(text) {
-		return nil
-	}
 	strong := make(map[string]struct{})
 	collect(strong, text, strongBefore)
 	collect(strong, text, strongAfter)
@@ -79,7 +76,13 @@ func contextualCandidates(text string, hasGoogleHash bool) []string {
 		collect(strong, text, googleBefore)
 	}
 	if len(strong) > 0 {
+		if hasAmbiguousPair(text, strong) {
+			return nil
+		}
 		return candidateList(strong)
+	}
+	if hasAmbiguousPair(text, nil) {
+		return nil
 	}
 	weak := make(map[string]struct{})
 	collect(weak, text, weakBefore)
@@ -108,15 +111,25 @@ func collect(unique map[string]struct{}, text string, pattern *regexp.Regexp) {
 	}
 }
 
-func hasAmbiguousPair(text string) bool {
+func hasAmbiguousPair(text string, candidates map[string]struct{}) bool {
 	for _, indexes := range ambiguousPair.FindAllStringSubmatchIndex(text, -1) {
 		if len(indexes) < 6 {
 			continue
 		}
 		leftStart, leftEnd := indexes[2], indexes[3]
 		rightStart, rightEnd := indexes[4], indexes[5]
-		if validCapture(text, leftStart, leftEnd) && validCapture(text, rightStart, rightEnd) &&
-			text[leftStart:leftEnd] != text[rightStart:rightEnd] {
+		left := text[leftStart:leftEnd]
+		right := text[rightStart:rightEnd]
+		if !validCapture(text, leftStart, leftEnd) || !validCapture(text, rightStart, rightEnd) || left == right {
+			continue
+		}
+		if candidates == nil {
+			return true
+		}
+		if _, ok := candidates[left]; ok {
+			return true
+		}
+		if _, ok := candidates[right]; ok {
 			return true
 		}
 	}
