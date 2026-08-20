@@ -59,6 +59,7 @@ If both values are empty, it uses `New message`.
 The body contains the complete SMS text.
 Bluepost converts invalid UTF-8 and removes unsafe control characters.
 It escapes notification markup before it calls `notify-send`.
+It puts `--` before the title and body so that message text cannot become a `notify-send` option.
 
 For a message without a clear code, Bluepost does not add a default action.
 Omarchy dismisses the notification after a left click and copies nothing.

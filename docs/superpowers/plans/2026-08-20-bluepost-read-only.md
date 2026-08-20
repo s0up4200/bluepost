@@ -1,5 +1,7 @@
 # Bluepost Read-Only Implementation Plan
 
+> Historical plan: Bluepost now ships one binary. Use `bluepost daemon` from `cmd/bluepost/daemon.go` instead of the `bluepostd` references below.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a read-only Go daemon and Cobra CLI for iPhone MAP messages and PBAP contacts on Omarchy.

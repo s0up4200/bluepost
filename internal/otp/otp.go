@@ -21,6 +21,7 @@ var (
 	weakAfter       = regexp.MustCompile(`(?i)\b([0-9]{4,10})[ \t]+(?:is|er)[ \t]+(?:your|din|ditt)?[ \t]*(?:code|kode)\b`)
 	googleBefore    = regexp.MustCompile(`(?i)\b(?:code|kode)\b` + connector + `(` + candidatePattern + `)`)
 	ambiguousPair   = regexp.MustCompile(`(?i)\b(` + candidatePattern + `)[ \t]+(?:or|and|eller|og)[ \t]+(` + candidatePattern + `)\b`)
+	urlSpan         = regexp.MustCompile(`(?i)(?:https?://|www\.|(?:[a-z0-9-]+\.)+[a-z]{2,}[/?#])[^\s<>"']+`)
 )
 
 func Extract(body string) (string, bool) {
@@ -71,14 +72,22 @@ func contextualCandidates(text string, hasGoogleHash bool) []string {
 	if hasAmbiguousPair(text) {
 		return nil
 	}
-	unique := make(map[string]struct{})
-	collect(unique, text, strongBefore)
-	collect(unique, text, strongAfter)
-	collect(unique, text, weakBefore)
-	collect(unique, text, weakAfter)
+	strong := make(map[string]struct{})
+	collect(strong, text, strongBefore)
+	collect(strong, text, strongAfter)
 	if hasGoogleHash {
-		collect(unique, text, googleBefore)
+		collect(strong, text, googleBefore)
 	}
+	if len(strong) > 0 {
+		return candidateList(strong)
+	}
+	weak := make(map[string]struct{})
+	collect(weak, text, weakBefore)
+	collect(weak, text, weakAfter)
+	return candidateList(weak)
+}
+
+func candidateList(unique map[string]struct{}) []string {
 	result := make([]string, 0, len(unique))
 	for code := range unique {
 		result = append(result, code)
@@ -118,6 +127,9 @@ func validCapture(text string, start, end int) bool {
 	if start < 0 || end > len(text) || start >= end || !validToken(text[start:end]) {
 		return false
 	}
+	if insideURL(text, start, end) {
+		return false
+	}
 	if start > 0 && forbiddenLeftNeighbor(text, start) {
 		return false
 	}
@@ -125,6 +137,15 @@ func validCapture(text string, start, end int) bool {
 		return false
 	}
 	return !compactDate(text[start:end])
+}
+
+func insideURL(text string, start, end int) bool {
+	for _, span := range urlSpan.FindAllStringIndex(text, -1) {
+		if start >= span[0] && end <= span[1] {
+			return true
+		}
+	}
+	return false
 }
 
 func validToken(value string) bool {

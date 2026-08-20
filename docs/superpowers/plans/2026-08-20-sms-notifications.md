@@ -1,5 +1,7 @@
 # SMS Notifications Implementation Plan
 
+> Historical plan: Bluepost now ships one binary. Use `bluepost daemon` from `cmd/bluepost/daemon.go` instead of the `bluepostd` references below.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Show every new SMS as an Omarchy notification and copy one clear authentication code after a left click.
@@ -475,6 +477,7 @@ Build notification arguments in this order:
 --app-name=Bluepost
 --icon=mail-unread-symbolic
 [--action=default=Copy code]
+--
 <title>
 <body>
 ```

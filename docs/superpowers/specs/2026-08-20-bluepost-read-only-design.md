@@ -98,8 +98,8 @@ bluepost client commands
 `bluepost daemon` owns every Bluetooth and storage operation.
 The daemon keeps the OBEX sessions open while it runs.
 
-`bluepost` is a short-lived D-Bus client.
-The CLI never reads encrypted files or contacts `obexd` directly.
+The non-daemon `bluepost` commands are short-lived D-Bus clients.
+These commands never read encrypted files or contact `obexd` directly.
 
 ## Dependencies
 
@@ -331,6 +331,7 @@ bluepost status
 bluepost messages [--limit N] [--iphone]
 bluepost contacts [query]
 bluepost contacts sync
+bluepost daemon [--phone ADDRESS]
 ```
 
 `bluepost messages` reads the encrypted local history through D-Bus.
@@ -403,7 +404,7 @@ go vet ./...
 go build ./cmd/bluepost
 ```
 
-A live hardware check runs the binaries from the source tree.
+A live hardware check runs the binary from the source tree.
 It requires an installed or separately available `obexd` and an already paired iPhone.
 The check does not install Bluepost or change system configuration.
 

@@ -41,7 +41,7 @@ func (notifier *Notifier) notify(ctx context.Context, message model.Message) {
 	if hasCode {
 		args = append(args, "--action=default=Copy code")
 	}
-	args = append(args, title, safeMarkup(message.Body))
+	args = append(args, "--", title, safeMarkup(message.Body))
 	action, err := notifier.run(ctx, "notify-send", args, "")
 	if err != nil {
 		notifier.report(ctx, "Could not show message notification")
