@@ -131,7 +131,7 @@ func Parse(reader io.Reader, limits Limits) ([]model.Contact, error) {
 func checkCardSizes(blob string, maximum int) error {
 	inCard := false
 	size := 0
-	for _, line := range strings.Split(blob, "\n") {
+	for line := range strings.SplitSeq(blob, "\n") {
 		marker := strings.ToUpper(strings.TrimSpace(line))
 		if marker == "BEGIN:VCARD" && !inCard {
 			inCard = true
@@ -183,7 +183,7 @@ func parseCard(lines []string, limits Limits) model.Contact {
 		if !ok {
 			continue
 		}
-		property := strings.SplitN(left, ";", 2)[0]
+		property, _, _ := strings.Cut(left, ";")
 		if dot := strings.LastIndexByte(property, '.'); dot >= 0 {
 			property = property[dot+1:]
 		}

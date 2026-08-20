@@ -3,6 +3,7 @@ package storage
 import (
 	"encoding/json"
 	"errors"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -241,12 +242,9 @@ func (repository *Repository) ResolveContact(address string) string {
 		if kind == pbap.EmailAddress {
 			addresses = contact.Emails
 		}
-		for _, candidate := range addresses {
-			if candidate == normalized {
-				name = contact.Name
-				matches++
-				break
-			}
+		if slices.Contains(addresses, normalized) {
+			name = contact.Name
+			matches++
 		}
 	}
 	if matches != 1 {

@@ -181,8 +181,7 @@ func privateTemp(runtimeDir, pattern string) (string, error) {
 }
 
 func disappearedError(err error) bool {
-	var dbusError dbus.Error
-	if errors.As(err, &dbusError) {
+	if dbusError, ok := errors.AsType[dbus.Error](err); ok {
 		return dbusError.Name == "org.freedesktop.DBus.Error.UnknownObject" ||
 			dbusError.Name == "org.bluez.obex.Error.NotFound"
 	}

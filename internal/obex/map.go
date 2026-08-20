@@ -200,7 +200,7 @@ func (client *MAP) ListRecent(
 		return nil, errors.New("MAP session is not available")
 	}
 	_, _ = client.transport.Call(ctx, obexDestination, mapPath, messageAccessSetFolder, "/")
-	for _, segment := range strings.Split(folder, "/") {
+	for segment := range strings.SplitSeq(folder, "/") {
 		if _, err := client.transport.Call(ctx, obexDestination, mapPath, messageAccessSetFolder, segment); err != nil {
 			return nil, fmt.Errorf("select MAP folder: %w", err)
 		}
