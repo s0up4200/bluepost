@@ -74,7 +74,8 @@ func TestBuildSortsFiveMessagesAndSelectsClipboardText(t *testing.T) {
 		t.Fatalf("message count %d", len(got.Messages))
 	}
 	if got.Messages[0].Handle != "otp" || got.Messages[0].Sender != "Stripe" ||
-		got.Messages[0].CopyText != "482731" || got.Messages[0].CopyKind != "code" {
+		got.Messages[0].Time != "20:05" || got.Messages[0].CopyText != "482731" ||
+		got.Messages[0].CopyKind != "code" {
 		t.Fatalf("OTP message %#v", got.Messages[0])
 	}
 	if got.Messages[1].Handle != "normal" || got.Messages[1].Sender != "+4722222222" ||
@@ -83,6 +84,20 @@ func TestBuildSortsFiveMessagesAndSelectsClipboardText(t *testing.T) {
 	}
 	if got.Messages[4].Handle != "first" {
 		t.Fatalf("last message %#v", got.Messages[4])
+	}
+}
+
+func TestBuildLabelsMissingTimestampAsUnknown(t *testing.T) {
+	t.Parallel()
+
+	got, err := Build(context.Background(), &fakeSource{
+		messages: []model.Message{{Handle: "missing-time"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Messages[0].Time != "Unknown time" {
+		t.Fatalf("time %q", got.Messages[0].Time)
 	}
 }
 

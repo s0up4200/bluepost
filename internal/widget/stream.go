@@ -29,6 +29,7 @@ type Message struct {
 	Handle    string    `json:"handle"`
 	Sender    string    `json:"sender"`
 	Timestamp time.Time `json:"timestamp"`
+	Time      string    `json:"time"`
 	Body      string    `json:"body"`
 	CopyText  string    `json:"copy_text"`
 	CopyKind  string    `json:"copy_kind"`
@@ -65,6 +66,10 @@ func Build(ctx context.Context, source Source) (Snapshot, error) {
 		if sender == "" {
 			sender = "Unknown sender"
 		}
+		displayTime := "Unknown time"
+		if !message.Timestamp.IsZero() {
+			displayTime = message.Timestamp.Format("15:04")
+		}
 		copyText, copyKind := message.Body, "message"
 		if code, ok := otp.Extract(message.Body); ok {
 			copyText, copyKind = code, "code"
@@ -73,6 +78,7 @@ func Build(ctx context.Context, source Source) (Snapshot, error) {
 			Handle:    message.Handle,
 			Sender:    sender,
 			Timestamp: message.Timestamp,
+			Time:      displayTime,
 			Body:      message.Body,
 			CopyText:  copyText,
 			CopyKind:  copyKind,

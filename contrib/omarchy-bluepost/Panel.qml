@@ -98,11 +98,6 @@ Panel {
     return value.charAt(0).toUpperCase() + value.slice(1)
   }
 
-  function messageTime(value) {
-    var timestamp = new Date(String(value || ""))
-    return isNaN(timestamp.getTime()) ? "" : Qt.formatTime(timestamp, "HH:mm")
-  }
-
   onOpenedChanged: if (opened) {
     cursorActive = false
     panelFlick.contentY = 0
@@ -369,7 +364,7 @@ Panel {
           font.bold: true
         }
         Text {
-          text: root.messageTime(row.message.timestamp)
+          text: String(row.message.time || "Unknown time")
           color: root.dim
           font.family: root.fontFamily
           font.pixelSize: Style.font.caption
