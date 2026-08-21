@@ -31,15 +31,26 @@ Click a widget message to copy its code or complete body.
 
 ## Requirements
 
-The first release supports Arch Linux on x86-64 with:
+The project tests Bluepost on Arch Linux on x86-64.
+The project has not tested other Linux distributions.
+The software does not contain an Arch-specific runtime check.
+The optional widget requires Omarchy.
 
-- Go 1.27 or later
+To build Bluepost, use Go 1.27 or later.
+Before Go 1.27 is released, use the latest Go 1.27 release candidate.
+
+The runtime requirements are:
+
+- Linux
 - BlueZ 5.86 or later
-- `bluez-obex`, including its `obexd` D-Bus service
+- The BlueZ `obexd` D-Bus service
 - GNOME Keyring and `/usr/bin/secret-tool`
 - `notify-send` from libnotify
-- `wl-copy` from wl-clipboard
+- A Wayland session with `wl-copy` from wl-clipboard
 - A user D-Bus session
+
+Arch Linux provides `obexd` in the `bluez-obex` package.
+Other distributions use different package names.
 
 This repository does not install or configure these requirements.
 A live test on August 20, 2026, used an iPhone 16 Pro Max.
