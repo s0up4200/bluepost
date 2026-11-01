@@ -3,7 +3,7 @@ module github.com/s0up4200/bluepost
 go 1.27.0
 
 require (
-	github.com/godbus/dbus/v5 v5.2.2
+	github.com/godbus/dbus/v5 v5.2.4
 	github.com/spf13/cobra v1.10.2
 )
 
